@@ -7,11 +7,6 @@ from models import Category
 app = FastAPI()
 
 
-@app.on_event("startup")
-def on_startup():
-    init_db()
-
-
 @app.get("/")
 def root():
     return {"message": "Finance API with database is running"}
