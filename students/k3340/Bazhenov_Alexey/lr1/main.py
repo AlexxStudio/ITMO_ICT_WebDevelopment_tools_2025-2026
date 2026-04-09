@@ -1,65 +1,69 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from typing import List
+from fastapi import FastAPI, Depends, HTTPException
+from sqlmodel import Session, select
+
+from connection import init_db, get_session
+from models import Category
 
 app = FastAPI()
 
 
-class Category(BaseModel):
-    id: int
-    name: str
-    type: str  # income / expense
-
-
-categories_db: List[Category] = []
+@app.on_event("startup")
+def on_startup():
+    init_db()
 
 
 @app.get("/")
 def root():
-    return {"message": "Finance API is running"}
+    return {"message": "Finance API with database is running"}
 
 
-# Получить все категории
-@app.get("/categories")
-def get_categories():
-    return categories_db
-
-
-# Получить категорию по id
-@app.get("/categories/{category_id}")
-def get_category(category_id: int):
-    for category in categories_db:
-        if category.id == category_id:
-            return category
-    raise HTTPException(status_code=404, detail="Category not found")
-
-
-# Создать категорию
 @app.post("/categories")
-def create_category(category: Category):
-    for existing_category in categories_db:
-        if existing_category.id == category.id:
-            raise HTTPException(status_code=400, detail="Category with this id already exists")
+def create_category(category: Category, session: Session = Depends(get_session)):
+    session.add(category)
+    session.commit()
+    session.refresh(category)
+    return category
 
-    categories_db.append(category)
+
+@app.get("/categories")
+def get_categories(session: Session = Depends(get_session)):
+    categories = session.exec(select(Category)).all()
+    return categories
+
+
+@app.get("/categories/{category_id}")
+def get_category(category_id: int, session: Session = Depends(get_session)):
+    category = session.get(Category, category_id)
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
     return category
 
 
 # Обновить категорию
 @app.put("/categories/{category_id}")
-def update_category(category_id: int, updated_category: Category):
-    for index, category in enumerate(categories_db):
-        if category.id == category_id:
-            categories_db[index] = updated_category
-            return updated_category
-    raise HTTPException(status_code=404, detail="Category not found")
+def update_category(category_id: int, updated_category: Category, session: Session = Depends(get_session)):
+    category = session.get(Category, category_id)
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    category.name = updated_category.name
+    category.type = updated_category.type
+
+    session.add(category)
+    session.commit()
+    session.refresh(category)
+
+    return category
 
 
 # Удалить категорию
 @app.delete("/categories/{category_id}")
-def delete_category(category_id: int):
-    for index, category in enumerate(categories_db):
-        if category.id == category_id:
-            deleted_category = categories_db.pop(index)
-            return {"message": "Category deleted", "category": deleted_category}
-    raise HTTPException(status_code=404, detail="Category not found")
+def delete_category(category_id: int, session: Session = Depends(get_session)):
+    category = session.get(Category, category_id)
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    session.delete(category)
+    session.commit()
+
+    return {"message": "Category deleted"}
