@@ -226,3 +226,9 @@ def hash_password(password: str) -> str:
 
 В ходе лабораторной работы был реализован серверный сервис управления личными финансами с использованием FastAPI.
 Реализованы CRUD-операции, связи one-to-many и many-to-many, миграции Alembic, JWT-аутентификация, а также бизнес-логика обработки транзакций.
+
+---
+
+## Ссылка на GitHub Pages
+
+https://alexxstudio.github.io/ITMO_ICT_WebDevelopment_tools_2025-2026/
