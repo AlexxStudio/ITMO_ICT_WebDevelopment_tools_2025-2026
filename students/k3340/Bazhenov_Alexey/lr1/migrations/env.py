@@ -6,7 +6,7 @@ from sqlalchemy import pool
 from alembic import context
 from dotenv import load_dotenv
 from sqlmodel import SQLModel
-from models import Category
+from models import User, Account, Category, Transaction, Tag, TransactionTag, Budget
 
 load_dotenv()
 
