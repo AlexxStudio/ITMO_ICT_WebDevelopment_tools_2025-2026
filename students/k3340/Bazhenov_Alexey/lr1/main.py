@@ -29,9 +29,11 @@ def root():
 
 @app.post("/register")
 def register_user(user_data: UserRegister, session: Session = Depends(get_session)):
-    existing_user = session.exec(select(User).where(User.email == user_data.email)).first()
+    existing_user = session.exec(select(User).where(
+        User.email == user_data.email)).first()
     if existing_user:
-        raise HTTPException(status_code=400, detail="User with this email already exists")
+        raise HTTPException(
+            status_code=400, detail="User with this email already exists")
 
     hashed_password = hash_password(user_data.password)
 
@@ -45,14 +47,18 @@ def register_user(user_data: UserRegister, session: Session = Depends(get_sessio
 
 @app.post("/login")
 def login_user(user_data: UserLogin, session: Session = Depends(get_session)):
-    user = session.exec(select(User).where(User.email == user_data.email)).first()
+    user = session.exec(select(User).where(
+        User.email == user_data.email)).first()
     if not user:
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+        raise HTTPException(
+            status_code=401, detail="Invalid email or password")
 
     if not verify_password(user_data.password, user.password):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+        raise HTTPException(
+            status_code=401, detail="Invalid email or password")
 
-    access_token = create_access_token(data={"sub": user.email, "user_id": user.id})
+    access_token = create_access_token(
+        data={"sub": user.email, "user_id": user.id})
 
     return {
         "access_token": access_token,
@@ -82,14 +88,16 @@ def change_password(
     current_user: User = Depends(get_current_user)
 ):
     if current_user.id != user_id:
-        raise HTTPException(status_code=403, detail="You can only change your own password")
+        raise HTTPException(
+            status_code=403, detail="You can only change your own password")
 
     user = session.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     if not verify_password(password_data.old_password, user.password):
-        raise HTTPException(status_code=400, detail="Old password is incorrect")
+        raise HTTPException(
+            status_code=400, detail="Old password is incorrect")
 
     user.password = hash_password(password_data.new_password)
 
@@ -192,6 +200,10 @@ def delete_category(category_id: int, session: Session = Depends(get_session)):
 
 @app.post("/transactions")
 def create_transaction(transaction: Transaction, session: Session = Depends(get_session)):
+    if transaction.amount <= 0:
+        raise HTTPException(
+            status_code=400, detail="Transaction amount must be greater than 0")
+
     account = session.get(Account, transaction.account_id)
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
@@ -203,9 +215,13 @@ def create_transaction(transaction: Transaction, session: Session = Depends(get_
     if category.type == "income":
         account.balance += transaction.amount
     elif category.type == "expense":
+        if account.balance - transaction.amount < 0:
+            raise HTTPException(
+                status_code=400, detail="Insufficient funds: balance cannot go below zero")
         account.balance -= transaction.amount
     else:
-        raise HTTPException(status_code=400, detail="Category type must be 'income' or 'expense'")
+        raise HTTPException(
+            status_code=400, detail="Category type must be 'income' or 'expense'")
 
     session.add(account)
     session.add(transaction)
@@ -316,7 +332,8 @@ def add_tag_to_transaction(transaction_tag: TransactionTag, session: Session = D
         (transaction_tag.transaction_id, transaction_tag.tag_id)
     )
     if existing_link:
-        raise HTTPException(status_code=400, detail="This tag is already linked to the transaction")
+        raise HTTPException(
+            status_code=400, detail="This tag is already linked to the transaction")
 
     session.add(transaction_tag)
     session.commit()
@@ -334,7 +351,8 @@ def get_transaction_tags(session: Session = Depends(get_session)):
 def delete_tag_from_transaction(transaction_id: int, tag_id: int, session: Session = Depends(get_session)):
     link = session.get(TransactionTag, (transaction_id, tag_id))
     if not link:
-        raise HTTPException(status_code=404, detail="TransactionTag link not found")
+        raise HTTPException(
+            status_code=404, detail="TransactionTag link not found")
 
     session.delete(link)
     session.commit()
@@ -357,6 +375,17 @@ def create_budget(budget: Budget, session: Session = Depends(get_session)):
     session.commit()
     session.refresh(budget)
     return budget
+
+
+@app.get("/my/budgets")
+def get_my_budgets(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    budgets = session.exec(
+        select(Budget).where(Budget.user_id == current_user.id)
+    ).all()
+    return budgets
 
 
 @app.get("/budgets")
@@ -394,7 +423,8 @@ def get_transaction_full(transaction_id: int, session: Session = Depends(get_ses
     category = session.get(Category, transaction.category_id)
 
     links = session.exec(
-        select(TransactionTag).where(TransactionTag.transaction_id == transaction_id)
+        select(TransactionTag).where(
+            TransactionTag.transaction_id == transaction_id)
     ).all()
 
     tags = []
@@ -421,13 +451,49 @@ def get_finance_summary(
     current_user: User = Depends(get_current_user)
 ):
     if current_user.id != user_id:
-        raise HTTPException(status_code=403, detail="You can view only your own report")
+        raise HTTPException(
+            status_code=403, detail="You can view only your own report")
 
     user = session.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    accounts = session.exec(select(Account).where(Account.user_id == user_id)).all()
+    accounts = session.exec(select(Account).where(
+        Account.user_id == user_id)).all()
+
+    total_income = 0.0
+    total_expense = 0.0
+
+    for account in accounts:
+        transactions = session.exec(
+            select(Transaction).where(Transaction.account_id == account.id)
+        ).all()
+
+        for transaction in transactions:
+            category = session.get(Category, transaction.category_id)
+            if not category:
+                continue
+
+            if category.type == "income":
+                total_income += transaction.amount
+            elif category.type == "expense":
+                total_expense += transaction.amount
+
+    return {
+        "total_income": total_income,
+        "total_expense": total_expense,
+        "balance": total_income - total_expense
+    }
+
+
+@app.get("/my/report/summary", response_model=FinanceSummary)
+def get_my_finance_summary(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    accounts = session.exec(
+        select(Account).where(Account.user_id == current_user.id)
+    ).all()
 
     total_income = 0.0
     total_expense = 0.0
