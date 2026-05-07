@@ -137,3 +137,9 @@ class FinanceSummary(SQLModel):
     total_income: float
     total_expense: float
     balance: float
+
+
+class ParsedPage(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    url: str
+    title: str
