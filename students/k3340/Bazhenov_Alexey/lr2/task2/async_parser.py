@@ -3,10 +3,13 @@ import time
 
 import aiohttp
 from bs4 import BeautifulSoup
-from sqlmodel import Session
+from sqlmodel.ext.asyncio.session import AsyncSession
 
-from students.k3340.Bazhenov_Alexey.lr1.connection import engine, init_db
 from students.k3340.Bazhenov_Alexey.lr1.models import ParsedPage
+from students.k3340.Bazhenov_Alexey.lr2.task2.async_connection import (
+    async_engine,
+    init_async_db
+)
 
 
 urls = [
@@ -25,28 +28,25 @@ async def parse_and_save(session, url):
 
             title = soup.title.string.strip() if soup.title else "No title"
 
-            with Session(engine) as db_session:
+            async with AsyncSession(async_engine) as db_session:
                 parsed_page = ParsedPage(url=url, title=title)
                 db_session.add(parsed_page)
-                db_session.commit()
+                await db_session.commit()
 
-            return f"{url} -> {title}"
+            print(f"{url} -> {title}")
 
     except Exception as e:
-        return f"Error parsing {url}: {e}"
+        print(f"Error parsing {url}: {e}")
 
 
 async def main():
-    init_db()
+    await init_async_db()
 
     start_time = time.time()
 
     async with aiohttp.ClientSession() as session:
         tasks = [parse_and_save(session, url) for url in urls]
-        results = await asyncio.gather(*tasks)
-
-    for result in results:
-        print(result)
+        await asyncio.gather(*tasks)
 
     end_time = time.time()
     print(f"\nExecution time: {end_time - start_time:.4f} seconds")
