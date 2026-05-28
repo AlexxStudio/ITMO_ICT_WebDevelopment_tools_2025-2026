@@ -1,0 +1,53 @@
+services:
+  parser:
+    build:
+      context: .
+      dockerfile: Dockerfile.parser
+    container_name: lr3_parser
+    ports:
+      - "8002:8001"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: lr3_api
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/lr3_db
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - parser
+      - db
+      - redis
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: lr3_worker
+    command: celery -A app.tasks worker --loglevel=info
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/lr3_db
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - parser
+      - db
+      - redis
+
+  db:
+    image: postgres:16
+    container_name: lr3_db
+    environment:
+      POSTGRES_DB: lr3_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+
+  redis:
+    image: redis:7
+    container_name: lr3_redis
+    ports:
+      - "6379:6379"
